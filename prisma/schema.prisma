@@ -384,6 +384,42 @@ model Report {
   @@index([projectId])
 }
 
+// ─── Unit Price Library ────────────────────────────────────
+
+model UnitPrice {
+  id          String      @id @default(cuid())
+  category    SectionType
+  description String
+  unit        String      @default("")
+  unitPrice   Float       @default(0)
+  crewCost    Float       @default(0)
+  productionRate Float    @default(0)
+  notes       String?
+  isActive    Boolean     @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([category])
+}
+
+// ─── Default Pricing Config ───────────────────────────────
+
+model DefaultPricingConfig {
+  id            String  @id @default(cuid())
+  name          String  @default("Default")
+  overhead      Float   @default(10)
+  profit        Float   @default(10)
+  bond          Float   @default(2)
+  tax           Float   @default(0)
+  mobilization  Float   @default(0)
+  insuranceRate Float   @default(0)
+  isDefault     Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 // ─── Templates ─────────────────────────────────────────────
 
 model DefaultTemplate {

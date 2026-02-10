@@ -12,12 +12,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { HardHat, LayoutDashboard, FolderOpen, FileText, BarChart3, LogOut, User } from "lucide-react";
+import { HardHat, LayoutDashboard, FolderOpen, FileText, BarChart3, LogOut, User, DollarSign } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/projects", label: "Projects", icon: FolderOpen },
+  { href: "/pricing", label: "Pricing", icon: DollarSign },
   { href: "/templates", label: "Templates", icon: FileText },
   { href: "/analytics", label: "Analytics", icon: BarChart3 },
 ];

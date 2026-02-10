@@ -8,6 +8,7 @@ import { StatusBadge } from "@/components/shared/status-badge";
 import { formatCurrency } from "@/lib/calculations";
 import { Plus, Search } from "lucide-react";
 import { ProjectFilters } from "@/components/project/project-filters";
+import { DeleteProjectButton } from "@/components/project/delete-project-button";
 
 export default async function ProjectsPage({
   searchParams,
@@ -87,9 +88,15 @@ export default async function ProjectsPage({
                         <span>Updated {new Date(project.updatedAt).toLocaleDateString()}</span>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <p className="font-semibold tabular-nums">{formatCurrency(total)}</p>
-                      <p className="text-xs text-muted-foreground">Bid Total</p>
+                    <div className="flex items-center gap-3">
+                      <div className="text-right">
+                        <p className="font-semibold tabular-nums">{formatCurrency(total)}</p>
+                        <p className="text-xs text-muted-foreground">Bid Total</p>
+                      </div>
+                      <DeleteProjectButton
+                        projectId={project.id}
+                        projectName={project.name}
+                      />
                     </div>
                   </CardContent>
                 </Card>

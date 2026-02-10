@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/calculations";
 import { calculateMarkupTotal } from "@/lib/calculations";
 import { Layers, DollarSign, Clock, FileText } from "lucide-react";
+import { DeleteProjectButton } from "@/components/project/delete-project-button";
 
 export default async function ProjectOverviewPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -45,7 +46,14 @@ export default async function ProjectOverviewPage({ params }: { params: Promise<
 
   return (
     <div className="space-y-6">
-      <h3 className="text-xl font-semibold">Project Overview</h3>
+      <div className="flex items-center justify-between">
+        <h3 className="text-xl font-semibold">Project Overview</h3>
+        <DeleteProjectButton
+          projectId={project.id}
+          projectName={project.name}
+          variant="full"
+        />
+      </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
