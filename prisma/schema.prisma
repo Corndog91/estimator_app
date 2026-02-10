@@ -1,0 +1,401 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Auth & Users ──────────────────────────────────────────
+
+enum Role {
+  ADMIN
+  ESTIMATOR
+  VIEWER
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         Role     @default(ESTIMATOR)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  projects         Project[]
+  defaultTemplates DefaultTemplate[]
+}
+
+// ─── Project ───────────────────────────────────────────────
+
+enum ProjectStatus {
+  DRAFT
+  IN_PROGRESS
+  REVIEW
+  COMPLETE
+  ARCHIVED
+}
+
+model Project {
+  id            String        @id @default(cuid())
+  projectNumber String
+  name          String
+  status        ProjectStatus @default(DRAFT)
+  createdById   String
+  createdBy     User          @relation(fields: [createdById], references: [id])
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  jobInfo              JobInfo?
+  bidSections          BidSection[]
+  buildingPadDesigns   BuildingPadDesign[]
+  pavingDesigns        PavingDesign[]
+  pondDesigns          PondDesign[]
+  costWriteUpItems     CostWriteUpItem[]
+  markupConfig         MarkupConfig?
+  calculatorSnapshots  CalculatorSnapshot[]
+  alternateSections    AlternateSection[]
+  reports              Report[]
+}
+
+// ─── Job Info (1:1 with Project) ───────────────────────────
+
+model JobInfo {
+  id        String  @id @default(cuid())
+  projectId String  @unique
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  owner             String?
+  architect         String?
+  engineer          String?
+  generalContractor String?
+  projectLocation   String?
+  planDate          DateTime?
+  specDate          DateTime?
+  technicianName    String?
+  notes             String?
+
+  // Scope boolean flags
+  retainingWalls  Boolean @default(false)
+  trenchSafety    Boolean @default(false)
+  geotextile      Boolean @default(false)
+  underdrains     Boolean @default(false)
+  erosionControl  Boolean @default(false)
+  demolition      Boolean @default(false)
+  stormDrainage   Boolean @default(false)
+  sanitarySewer   Boolean @default(false)
+  waterLine       Boolean @default(false)
+  gasLine         Boolean @default(false)
+  electricConduit Boolean @default(false)
+  siteLighting    Boolean @default(false)
+  landscaping     Boolean @default(false)
+  irrigation      Boolean @default(false)
+  fencing         Boolean @default(false)
+  signage         Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ─── BID Engine ────────────────────────────────────────────
+
+enum SectionType {
+  BUILDING_PAD
+  PAVING
+  PONDS
+  SITE_CLEARING
+  EROSION
+  UTILITIES
+  TRUCKING
+  MISC
+}
+
+model BidSection {
+  id          String      @id @default(cuid())
+  projectId   String
+  project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name        String
+  sortOrder   Int
+  sectionType SectionType
+
+  lineItems LineItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId])
+}
+
+model LineItem {
+  id             String     @id @default(cuid())
+  bidSectionId   String
+  bidSection     BidSection @relation(fields: [bidSectionId], references: [id], onDelete: Cascade)
+  description    String
+  quantity       Float      @default(0)
+  unit           String     @default("")
+  unitPrice      Float      @default(0)
+  crewCost       Float      @default(0)
+  productionRate Float      @default(0)
+  days           Float      @default(0)
+  totalCost      Float      @default(0)
+  notes          String?
+  sortOrder      Int
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([bidSectionId])
+}
+
+// ─── Design Inputs ─────────────────────────────────────────
+
+model BuildingPadDesign {
+  id               String  @id @default(cuid())
+  projectId        String
+  project          Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  buildingName     String
+  topOfSlab        Float   @default(0)
+  ffElevation      Float   @default(0)
+  padSubgrade      Float   @default(0)
+  overExcavation   Float   @default(0)
+  compactedLift    Float   @default(0)
+  percentShrinkage Float   @default(0)
+  percentSwell     Float   @default(0)
+  avgCutDepth      Float   @default(0)
+  avgFillDepth     Float   @default(0)
+  sqft             Float   @default(0)
+  cutVolume        Float   @default(0)
+  fillVolume       Float   @default(0)
+
+  areaEntries AreaEntry[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId])
+}
+
+model PavingDesign {
+  id            String  @id @default(cuid())
+  projectId     String
+  project       Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  pavingArea    String  @default("")
+  subgradeDepth Float   @default(0)
+  baseThickness Float   @default(0)
+  pavementType  String  @default("")
+  sqft          Float   @default(0)
+  cutVolume     Float   @default(0)
+  fillVolume    Float   @default(0)
+
+  areaEntries AreaEntry[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId])
+}
+
+model PondDesign {
+  id              String  @id @default(cuid())
+  projectId       String
+  project         Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  pondName        String
+  topElevation    Float   @default(0)
+  bottomElevation Float   @default(0)
+  sideSlope       Float   @default(0)
+  length          Float   @default(0)
+  width           Float   @default(0)
+  cutVolume       Float   @default(0)
+
+  areaEntries AreaEntry[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId])
+}
+
+// ─── Area Entries ──────────────────────────────────────────
+
+enum DesignType {
+  BUILDING_PAD
+  PAVING
+  POND
+}
+
+enum CutOrFill {
+  CUT
+  FILL
+}
+
+model AreaEntry {
+  id                String    @id @default(cuid())
+  designType        DesignType
+  stationOrGrid     String
+  existingElevation Float     @default(0)
+  proposedElevation Float     @default(0)
+  cutOrFill         CutOrFill
+  area              Float     @default(0)
+  volume            Float     @default(0)
+  sortOrder         Int
+
+  buildingPadDesignId String?
+  buildingPadDesign   BuildingPadDesign? @relation(fields: [buildingPadDesignId], references: [id], onDelete: Cascade)
+
+  pavingDesignId String?
+  pavingDesign   PavingDesign? @relation(fields: [pavingDesignId], references: [id], onDelete: Cascade)
+
+  pondDesignId String?
+  pondDesign   PondDesign? @relation(fields: [pondDesignId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([buildingPadDesignId])
+  @@index([pavingDesignId])
+  @@index([pondDesignId])
+}
+
+// ─── Cost & Markup ─────────────────────────────────────────
+
+enum CostCategory {
+  EQUIPMENT
+  LABOR
+  MATERIAL
+  SUBCONTRACTOR
+  OTHER
+}
+
+model CostWriteUpItem {
+  id           String       @id @default(cuid())
+  projectId    String
+  project      Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  category     CostCategory
+  description  String
+  totalFromBid Float        @default(0)
+  adjustedCost Float        @default(0)
+  notes        String?
+  sortOrder    Int          @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId])
+}
+
+model MarkupConfig {
+  id            String  @id @default(cuid())
+  projectId     String  @unique
+  project       Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  overhead      Float   @default(10)
+  profit        Float   @default(10)
+  bond          Float   @default(2)
+  tax           Float   @default(0)
+  mobilization  Float   @default(0)
+  insuranceRate Float   @default(0)
+
+  lineItems MarkupLineItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model MarkupLineItem {
+  id              String       @id @default(cuid())
+  markupConfigId  String
+  markupConfig    MarkupConfig @relation(fields: [markupConfigId], references: [id], onDelete: Cascade)
+  description     String
+  baseCost        Float        @default(0)
+  markupPercent   Float        @default(0)
+  totalWithMarkup Float        @default(0)
+  sortOrder       Int          @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([markupConfigId])
+}
+
+// ─── Calculators ───────────────────────────────────────────
+
+enum CalculatorType {
+  HAUL_TRUCK
+  EXCAVATION_CREW
+  COMPACTION
+  IMPORT_EXPORT
+}
+
+model CalculatorSnapshot {
+  id             String         @id @default(cuid())
+  projectId      String
+  project        Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  calculatorType CalculatorType
+  name           String         @default("")
+  inputs         Json
+  outputs        Json
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId])
+}
+
+// ─── Alternates ────────────────────────────────────────────
+
+enum AddDeduct {
+  ADD
+  DEDUCT
+}
+
+model AlternateSection {
+  id          String    @id @default(cuid())
+  projectId   String
+  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  addDeduct   AddDeduct
+  amount      Float     @default(0)
+  sortOrder   Int       @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId])
+}
+
+// ─── Reports ───────────────────────────────────────────────
+
+enum ReportType {
+  PROPOSAL
+  PACKAGE
+  COST_SUMMARY
+}
+
+model Report {
+  id          String     @id @default(cuid())
+  projectId   String
+  project     Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  reportType  ReportType
+  fileUrl     String?
+  generatedAt DateTime   @default(now())
+
+  @@index([projectId])
+}
+
+// ─── Templates ─────────────────────────────────────────────
+
+model DefaultTemplate {
+  id                      String  @id @default(cuid())
+  name                    String
+  description             String?
+  defaultLineItems        Json?
+  defaultMarkup           Json?
+  defaultCalculatorInputs Json?
+  createdById             String
+  createdBy               User    @relation(fields: [createdById], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
