@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -11,8 +11,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Package, BookOpen } from "lucide-react";
 import { formatCurrency, formatNumber, calculateLineItemTotal, calculateDays } from "@/lib/calculations";
+import { PricingCatalogPicker, type UnitPrice } from "@/components/bid/pricing-catalog-picker";
 
 interface LineItem {
   id: string;
@@ -32,12 +33,17 @@ type SaveStatus = "idle" | "saving" | "saved" | "error";
 
 interface LineItemTableProps {
   sectionId: string;
+  sectionType: string;
   items: LineItem[];
   onItemsChange: (items: LineItem[]) => void;
   onSaveStatusChange: (status: SaveStatus) => void;
 }
 
-export function LineItemTable({ sectionId, items, onItemsChange, onSaveStatusChange }: LineItemTableProps) {
+export function LineItemTable({ sectionId, sectionType, items, onItemsChange, onSaveStatusChange }: LineItemTableProps) {
+  const [catalogOpen, setCatalogOpen] = useState(false);
+  const [catalogMode, setCatalogMode] = useState<"multi" | "single">("multi");
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
+
   const addItem = useCallback(async () => {
     const res = await fetch("/api/bid/line-items", {
       method: "POST",
@@ -94,6 +100,102 @@ export function LineItemTable({ sectionId, items, onItemsChange, onSaveStatusCha
     [items, onItemsChange, onSaveStatusChange]
   );
 
+  const handleBulkAddFromCatalog = useCallback(
+    async (prices: UnitPrice[]) => {
+      onSaveStatusChange("saving");
+      const newItems: LineItem[] = [];
+
+      for (const price of prices) {
+        try {
+          const res = await fetch("/api/bid/line-items", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              bidSectionId: sectionId,
+              description: price.description,
+              unit: price.unit,
+              unitPrice: price.unitPrice,
+              crewCost: price.crewCost,
+              productionRate: price.productionRate,
+            }),
+          });
+          if (res.ok) {
+            newItems.push(await res.json());
+          }
+        } catch {
+          // continue with remaining items
+        }
+      }
+
+      if (newItems.length > 0) {
+        onItemsChange([...items, ...newItems]);
+        onSaveStatusChange("saved");
+        setTimeout(() => onSaveStatusChange("idle"), 2000);
+      } else {
+        onSaveStatusChange("error");
+      }
+    },
+    [sectionId, items, onItemsChange, onSaveStatusChange]
+  );
+
+  const handleUpdateFromCatalog = useCallback(
+    async (prices: UnitPrice[]) => {
+      if (!editingItemId || prices.length === 0) return;
+      const price = prices[0];
+      onSaveStatusChange("saving");
+
+      // Optimistic update — preserve description and quantity
+      const updated = items.map((item) => {
+        if (item.id !== editingItemId) return item;
+        const newItem = {
+          ...item,
+          unit: price.unit,
+          unitPrice: price.unitPrice,
+          crewCost: price.crewCost,
+          productionRate: price.productionRate,
+        };
+        newItem.totalCost = calculateLineItemTotal(item.quantity, price.unitPrice);
+        newItem.days = calculateDays(item.quantity, price.productionRate);
+        return newItem;
+      });
+      onItemsChange(updated);
+
+      try {
+        const res = await fetch(`/api/bid/line-items/${editingItemId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            unit: price.unit,
+            unitPrice: price.unitPrice,
+            crewCost: price.crewCost,
+            productionRate: price.productionRate,
+          }),
+        });
+        if (res.ok) {
+          onSaveStatusChange("saved");
+          setTimeout(() => onSaveStatusChange("idle"), 2000);
+        } else {
+          onSaveStatusChange("error");
+        }
+      } catch {
+        onSaveStatusChange("error");
+      }
+      setEditingItemId(null);
+    },
+    [editingItemId, items, onItemsChange, onSaveStatusChange]
+  );
+
+  const openBrowse = useCallback(() => {
+    setCatalogMode("multi");
+    setCatalogOpen(true);
+  }, []);
+
+  const openEditCatalog = useCallback((itemId: string) => {
+    setEditingItemId(itemId);
+    setCatalogMode("single");
+    setCatalogOpen(true);
+  }, []);
+
   const sectionTotal = useMemo(() => items.reduce((sum, li) => sum + li.totalCost, 0), [items]);
   const totalDays = useMemo(() => Math.max(...items.map((li) => li.days), 0), [items]);
 
@@ -121,12 +223,13 @@ export function LineItemTable({ sectionId, items, onItemsChange, onSaveStatusCha
                 item={item}
                 onUpdate={updateItem}
                 onDelete={deleteItem}
+                onBrowseCatalog={openEditCatalog}
               />
             ))}
             {items.length === 0 && (
               <TableRow>
                 <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
-                  No line items. Click &quot;Add Item&quot; to start.
+                  No line items. Click &quot;Add Item&quot; or &quot;Browse Prices&quot; to start.
                 </TableCell>
               </TableRow>
             )}
@@ -135,10 +238,16 @@ export function LineItemTable({ sectionId, items, onItemsChange, onSaveStatusCha
       </div>
 
       <div className="flex items-center justify-between mt-3">
-        <Button variant="outline" size="sm" onClick={addItem} className="gap-2">
-          <Plus className="h-3 w-3" />
-          Add Item
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={addItem} className="gap-2">
+            <Plus className="h-3 w-3" />
+            Add Item
+          </Button>
+          <Button variant="outline" size="sm" onClick={openBrowse} className="gap-2">
+            <Package className="h-3 w-3" />
+            Browse Prices
+          </Button>
+        </div>
         <div className="flex items-center gap-6 text-sm">
           <span className="text-muted-foreground">
             Max duration: <span className="font-medium text-foreground">{formatNumber(totalDays, 1)} days</span>
@@ -148,6 +257,14 @@ export function LineItemTable({ sectionId, items, onItemsChange, onSaveStatusCha
           </span>
         </div>
       </div>
+
+      <PricingCatalogPicker
+        open={catalogOpen}
+        onOpenChange={setCatalogOpen}
+        sectionType={sectionType}
+        mode={catalogMode}
+        onSelect={catalogMode === "multi" ? handleBulkAddFromCatalog : handleUpdateFromCatalog}
+      />
     </div>
   );
 }
@@ -156,10 +273,12 @@ function LineItemRow({
   item,
   onUpdate,
   onDelete,
+  onBrowseCatalog,
 }: {
   item: LineItem;
   onUpdate: (id: string, field: string, value: string | number) => void;
   onDelete: (id: string) => void;
+  onBrowseCatalog: (id: string) => void;
 }) {
   const handleBlur = useCallback(
     (field: string, value: string, type: "string" | "number" = "string") => {
@@ -172,11 +291,22 @@ function LineItemRow({
   return (
     <TableRow className="group">
       <TableCell>
-        <Input
-          defaultValue={item.description}
-          onBlur={(e) => handleBlur("description", e.target.value)}
-          className="h-8 border-0 shadow-none focus-visible:ring-1 bg-transparent"
-        />
+        <div className="flex items-center gap-1">
+          <Input
+            defaultValue={item.description}
+            onBlur={(e) => handleBlur("description", e.target.value)}
+            className="h-8 border-0 shadow-none focus-visible:ring-1 bg-transparent"
+          />
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6 shrink-0 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-primary"
+            onClick={() => onBrowseCatalog(item.id)}
+            title="Apply pricing from catalog"
+          >
+            <BookOpen className="h-3 w-3" />
+          </Button>
+        </div>
       </TableCell>
       <TableCell>
         <Input

@@ -166,6 +166,10 @@ export default function MarkupPage() {
               <span className="tabular-nums">{formatCurrency(breakdown.tax)}</span>
             </div>
             <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">+ Insurance ({config.insuranceRate}%)</span>
+              <span className="tabular-nums">{formatCurrency(breakdown.insurance)}</span>
+            </div>
+            <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">+ Mobilization</span>
               <span className="tabular-nums">{formatCurrency(breakdown.mobilization)}</span>
             </div>

@@ -2,11 +2,18 @@ import { prisma } from "@/lib/db";
 import { notFound } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { History } from "lucide-react";
+import { auth } from "@/lib/auth";
+import { redirect } from "next/navigation";
+import { projectScopeWhere } from "@/lib/project-access";
 
 export default async function HistoryPage({ params }: { params: Promise<{ id: string }> }) {
+  const session = await auth();
+  if (!session) redirect("/login");
+  const scopeWhere = projectScopeWhere(session);
+
   const { id } = await params;
-  const project = await prisma.project.findUnique({
-    where: { id },
+  const project = await prisma.project.findFirst({
+    where: { id, ...scopeWhere },
     select: { createdAt: true, updatedAt: true, status: true },
   });
 

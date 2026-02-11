@@ -29,6 +29,7 @@ export interface MarkupInputs {
   bond: number;
   tax: number;
   mobilization: number;
+  insuranceRate?: number;
 }
 
 export function calculateMarkupTotal(baseCost: number, config: MarkupInputs): number {
@@ -37,7 +38,8 @@ export function calculateMarkupTotal(baseCost: number, config: MarkupInputs): nu
   const subtotal = baseCost + overhead + profit;
   const bond = subtotal * (config.bond / 100);
   const tax = subtotal * (config.tax / 100);
-  return subtotal + bond + tax + config.mobilization;
+  const insurance = subtotal * ((config.insuranceRate ?? 0) / 100);
+  return subtotal + bond + tax + insurance + config.mobilization;
 }
 
 export function calculateMarkupBreakdown(baseCost: number, config: MarkupInputs) {
@@ -46,10 +48,11 @@ export function calculateMarkupBreakdown(baseCost: number, config: MarkupInputs)
   const subtotal = baseCost + overhead + profit;
   const bond = subtotal * (config.bond / 100);
   const tax = subtotal * (config.tax / 100);
-  const total = subtotal + bond + tax + config.mobilization;
+  const insurance = subtotal * ((config.insuranceRate ?? 0) / 100);
+  const total = subtotal + bond + tax + insurance + config.mobilization;
   const marginPercent = safeDivide(total - baseCost, total) * 100;
 
-  return { overhead, profit, subtotal, bond, tax, total, mobilization: config.mobilization, marginPercent };
+  return { overhead, profit, subtotal, bond, tax, insurance, total, mobilization: config.mobilization, marginPercent };
 }
 
 export function calculateSectionTotal(lineItems: { quantity: number; unitPrice: number }[]): number {
@@ -115,6 +118,123 @@ export function calculateCompaction(inputs: CompactionInputs) {
   const totalDays = safeDivide(totalHours, inputs.hoursPerDay);
 
   return { totalLifts, sfPerHour, hoursPerLift, totalHours, totalDays };
+}
+
+// ─── Haul Balance Calculator ────────────────────────────────
+
+export interface HaulBalanceInputs {
+  // Cut / Material Sources
+  topsoilStripCY: number;
+  buildingPadCutCY: number;
+  pondExcavationCY: number;
+  pavingUtilityCutCY: number;
+  otherCutCY: number;
+  // Fill Requirements
+  buildingPadFillCY: number;
+  pavingUtilityFillCY: number;
+  topsoilRespreadCY: number;
+  otherFillCY: number;
+  // Adjustment Factors
+  shrinkagePct: number;
+  swellPct: number;
+  usablePct: number;
+}
+
+export interface HaulBalanceOutputs {
+  // Site Cut Summary
+  totalCutCY: number;
+  commonCutCY: number;
+  usableCutCY: number;
+  unusableCutCY: number;
+  // Topsoil Balance
+  topsoilAvailableCY: number;
+  topsoilNeededCY: number;
+  topsoilExcessCY: number;
+  topsoilDeficitCY: number;
+  // Earthwork Balance
+  totalFillRequiredCY: number;
+  usableCutCompactedCY: number;
+  fillSurplusCY: number;
+  fillDeficitCY: number;
+  // Haul Summary
+  swellFactor: number;
+  wasteOutLooseCY: number;
+  topsoilOutLooseCY: number;
+  totalHaulOutLooseCY: number;
+  borrowInCY: number;
+  topsoilInCY: number;
+  totalHaulInCY: number;
+  netDirection: "HAUL_OUT" | "HAUL_IN" | "BALANCED";
+}
+
+export function calculateHaulBalance(inputs: HaulBalanceInputs): HaulBalanceOutputs {
+  // Site Cut Summary
+  const totalCutCY = inputs.topsoilStripCY + inputs.buildingPadCutCY
+    + inputs.pondExcavationCY + inputs.pavingUtilityCutCY + inputs.otherCutCY;
+  const commonCutCY = inputs.buildingPadCutCY + inputs.pondExcavationCY
+    + inputs.pavingUtilityCutCY + inputs.otherCutCY;
+  const usableCutCY = commonCutCY * (inputs.usablePct / 100);
+  const unusableCutCY = commonCutCY - usableCutCY;
+
+  // Topsoil Balance (separate material stream)
+  const topsoilAvailableCY = inputs.topsoilStripCY;
+  const topsoilNeededCY = inputs.topsoilRespreadCY;
+  const topsoilExcessCY = Math.max(topsoilAvailableCY - topsoilNeededCY, 0);
+  const topsoilDeficitCY = Math.max(topsoilNeededCY - topsoilAvailableCY, 0);
+
+  // Common Earthwork Balance
+  const totalFillRequiredCY = inputs.buildingPadFillCY + inputs.pavingUtilityFillCY + inputs.otherFillCY;
+  const usableCutCompactedCY = usableCutCY * (1 - inputs.shrinkagePct / 100);
+  const fillSurplusCY = Math.max(usableCutCompactedCY - totalFillRequiredCY, 0);
+  const fillDeficitCY = Math.max(totalFillRequiredCY - usableCutCompactedCY, 0);
+
+  // Haul Out (loose CY for trucking)
+  const swellFactor = 1 + inputs.swellPct / 100;
+  const wasteOutLooseCY = (unusableCutCY + fillSurplusCY) * swellFactor;
+  const topsoilOutLooseCY = topsoilExcessCY * swellFactor;
+  const totalHaulOutLooseCY = wasteOutLooseCY + topsoilOutLooseCY;
+
+  // Haul In (compacted CY)
+  const borrowInCY = fillDeficitCY;
+  const topsoilInCY = topsoilDeficitCY;
+  const totalHaulInCY = borrowInCY + topsoilInCY;
+
+  // Net Direction
+  const netDirection: HaulBalanceOutputs["netDirection"] =
+    totalHaulOutLooseCY > 0 ? "HAUL_OUT" : totalHaulInCY > 0 ? "HAUL_IN" : "BALANCED";
+
+  return {
+    totalCutCY, commonCutCY, usableCutCY, unusableCutCY,
+    topsoilAvailableCY, topsoilNeededCY, topsoilExcessCY, topsoilDeficitCY,
+    totalFillRequiredCY, usableCutCompactedCY, fillSurplusCY, fillDeficitCY,
+    swellFactor, wasteOutLooseCY, topsoilOutLooseCY, totalHaulOutLooseCY,
+    borrowInCY, topsoilInCY, totalHaulInCY, netDirection,
+  };
+}
+
+// ─── Production / Crew Calculator ───────────────────────────
+
+export interface ExcavationCrewInputs {
+  quantity: number;
+  productionRatePerDay: number;
+  crewCostPerDay: number;
+  equipmentCostPerDay: number;
+}
+
+export function calculateExcavationCrew(inputs: ExcavationCrewInputs) {
+  const durationDays = safeDivide(inputs.quantity, inputs.productionRatePerDay);
+  const crewCost = durationDays * inputs.crewCostPerDay;
+  const equipmentCost = durationDays * inputs.equipmentCostPerDay;
+  const totalCost = crewCost + equipmentCost;
+  const unitCost = safeDivide(totalCost, inputs.quantity);
+
+  return {
+    durationDays,
+    crewCost,
+    equipmentCost,
+    totalCost,
+    unitCost,
+  };
 }
 
 // ─── Format Helpers ────────────────────────────────────────

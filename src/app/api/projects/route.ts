@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { projectScopeWhere } from "@/lib/project-access";
 
 export async function GET(req: NextRequest) {
   const session = await auth();
@@ -9,9 +10,11 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const status = searchParams.get("status");
   const search = searchParams.get("search");
+  const scopeWhere = projectScopeWhere(session);
 
   const projects = await prisma.project.findMany({
     where: {
+      ...scopeWhere,
       ...(status && status !== "ALL" ? { status: status as "DRAFT" | "IN_PROGRESS" | "REVIEW" | "COMPLETE" | "ARCHIVED" } : {}),
       ...(search ? {
         OR: [
@@ -62,7 +65,7 @@ export async function POST(req: NextRequest) {
       name,
       createdById: session.user.id,
       jobInfo: { create: {} },
-      markupConfig: { create: { overhead: 10, profit: 10, bond: 2 } },
+      markupConfig: { create: { overhead: 10, profit: 10, bond: 2, tax: 0, mobilization: 0, insuranceRate: 0 } },
       ...templateData,
     },
   });

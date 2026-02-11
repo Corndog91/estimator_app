@@ -4,13 +4,15 @@ import { prisma } from "@/lib/db";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/calculations";
 import { BarChart3, TrendingUp, DollarSign, Layers } from "lucide-react";
+import { projectScopeWhere } from "@/lib/project-access";
 
 export default async function AnalyticsPage() {
   const session = await auth();
   if (!session) redirect("/login");
+  const scopeWhere = projectScopeWhere(session);
 
   const projects = await prisma.project.findMany({
-    where: { status: { not: "ARCHIVED" } },
+    where: { ...scopeWhere, status: { not: "ARCHIVED" } },
     include: {
       bidSections: {
         include: { lineItems: { select: { totalCost: true, quantity: true, unit: true } } },

@@ -5,11 +5,18 @@ import { formatCurrency } from "@/lib/calculations";
 import { calculateMarkupTotal } from "@/lib/calculations";
 import { Layers, DollarSign, Clock, FileText } from "lucide-react";
 import { DeleteProjectButton } from "@/components/project/delete-project-button";
+import { auth } from "@/lib/auth";
+import { redirect } from "next/navigation";
+import { projectScopeWhere } from "@/lib/project-access";
 
 export default async function ProjectOverviewPage({ params }: { params: Promise<{ id: string }> }) {
+  const session = await auth();
+  if (!session) redirect("/login");
+  const scopeWhere = projectScopeWhere(session);
+
   const { id } = await params;
-  const project = await prisma.project.findUnique({
-    where: { id },
+  const project = await prisma.project.findFirst({
+    where: { id, ...scopeWhere },
     include: {
       jobInfo: true,
       bidSections: {
@@ -41,6 +48,7 @@ export default async function ProjectOverviewPage({ params }: { params: Promise<
         bond: project.markupConfig.bond,
         tax: project.markupConfig.tax,
         mobilization: project.markupConfig.mobilization,
+        insuranceRate: project.markupConfig.insuranceRate,
       })
     : bidTotal;
 

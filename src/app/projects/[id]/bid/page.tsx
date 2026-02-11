@@ -204,6 +204,7 @@ export default function BidPage() {
                 <CardContent className="pt-0">
                   <LineItemTable
                     sectionId={section.id}
+                    sectionType={section.sectionType}
                     items={section.lineItems}
                     onItemsChange={(items) => updateSectionItems(section.id, items)}
                     onSaveStatusChange={setSaveStatus}

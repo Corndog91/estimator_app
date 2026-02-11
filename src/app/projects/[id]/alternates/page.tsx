@@ -7,8 +7,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { AutoSaveIndicator } from "@/components/shared/auto-save-indicator";
 import { formatCurrency } from "@/lib/calculations";
 import { Plus, Trash2 } from "lucide-react";
+
+type SaveStatus = "idle" | "saving" | "saved" | "error";
 
 interface Alternate {
   id: string;
@@ -23,6 +26,7 @@ export default function AlternatesPage() {
   const params = useParams();
   const projectId = params.id as string;
   const [alternates, setAlternates] = useState<Alternate[]>([]);
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
@@ -44,12 +48,41 @@ export default function AlternatesPage() {
   }, [projectId]);
 
   const deleteAlternate = useCallback(async (id: string) => {
+    setSaveStatus("saving");
+    const previousAlternates = alternates;
     setAlternates((prev) => prev.filter((a) => a.id !== id));
-  }, []);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/alternates/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete alternate");
+      setSaveStatus("saved");
+      setTimeout(() => setSaveStatus("idle"), 2000);
+    } catch {
+      setAlternates(previousAlternates);
+      setSaveStatus("error");
+    }
+  }, [alternates, projectId]);
 
-  const updateAlternate = useCallback((id: string, field: string, value: string | number) => {
+  const updateAlternate = useCallback(async (id: string, field: string, value: string | number) => {
+    setSaveStatus("saving");
+    const previousAlternates = alternates;
     setAlternates((prev) => prev.map((a) => (a.id === id ? { ...a, [field]: value } : a)));
-  }, []);
+
+    try {
+      const res = await fetch(`/api/projects/${projectId}/alternates/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ [field]: value }),
+      });
+      if (!res.ok) throw new Error("Failed to update alternate");
+      const updated = await res.json();
+      setAlternates((prev) => prev.map((a) => (a.id === id ? updated : a)));
+      setSaveStatus("saved");
+      setTimeout(() => setSaveStatus("idle"), 2000);
+    } catch {
+      setAlternates(previousAlternates);
+      setSaveStatus("error");
+    }
+  }, [alternates, projectId]);
 
   const netTotal = alternates.reduce((sum, a) => {
     return sum + (a.addDeduct === "ADD" ? a.amount : -a.amount);
@@ -61,10 +94,13 @@ export default function AlternatesPage() {
     <div className="space-y-6 max-w-4xl">
       <div className="flex items-center justify-between">
         <h3 className="text-xl font-semibold">Alternates</h3>
-        <Button size="sm" onClick={addAlternate} className="gap-2">
-          <Plus className="h-4 w-4" />
-          Add Alternate
-        </Button>
+        <div className="flex items-center gap-3">
+          <AutoSaveIndicator status={saveStatus} />
+          <Button size="sm" onClick={addAlternate} className="gap-2">
+            <Plus className="h-4 w-4" />
+            Add Alternate
+          </Button>
+        </div>
       </div>
 
       <Card>

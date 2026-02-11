@@ -7,13 +7,16 @@ import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { formatCurrency } from "@/lib/calculations";
 import { Plus, FolderOpen, DollarSign, Clock, CheckCircle2 } from "lucide-react";
+import { projectScopeWhere } from "@/lib/project-access";
 
 export default async function DashboardPage() {
   const session = await auth();
   if (!session) redirect("/login");
+  const scopeWhere = projectScopeWhere(session);
 
   const [projects, stats] = await Promise.all([
     prisma.project.findMany({
+      where: scopeWhere,
       orderBy: { updatedAt: "desc" },
       take: 10,
       include: {
@@ -24,6 +27,7 @@ export default async function DashboardPage() {
       },
     }),
     prisma.project.groupBy({
+      where: scopeWhere,
       by: ["status"],
       _count: true,
     }),

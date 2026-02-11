@@ -110,6 +110,7 @@ enum SectionType {
   UTILITIES
   TRUCKING
   MISC
+  SURVEY
 }
 
 model BidSection {

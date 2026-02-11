@@ -51,25 +51,42 @@ export default function CostWriteUpPage() {
   }, [projectId]);
 
   const deleteItem = useCallback(async (id: string) => {
-    await fetch(`/api/projects/${projectId}/cost-writeup`, {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id }),
-    });
-    setItems((prev) => prev.filter((i) => i.id !== id));
-  }, [projectId]);
-
-  const updateItem = useCallback(async (id: string, field: string, value: string | number) => {
     setSaveStatus("saving");
-    setItems((prev) => prev.map((i) => (i.id === id ? { ...i, [field]: value } : i)));
+    const previousItems = items;
+    setItems((prev) => prev.filter((i) => i.id !== id));
     try {
-      // Use a generic update endpoint - we'll just refetch for simplicity
+      const res = await fetch(`/api/projects/${projectId}/cost-writeup/${id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("Failed to delete item");
       setSaveStatus("saved");
       setTimeout(() => setSaveStatus("idle"), 2000);
     } catch {
+      setItems(previousItems);
       setSaveStatus("error");
     }
-  }, []);
+  }, [items, projectId]);
+
+  const updateItem = useCallback(async (id: string, field: string, value: string | number) => {
+    setSaveStatus("saving");
+    const previousItems = items;
+    setItems((prev) => prev.map((i) => (i.id === id ? { ...i, [field]: value } : i)));
+    try {
+      const res = await fetch(`/api/projects/${projectId}/cost-writeup/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ [field]: value }),
+      });
+      if (!res.ok) throw new Error("Failed to update item");
+      const updated = await res.json();
+      setItems((prev) => prev.map((i) => (i.id === id ? updated : i)));
+      setSaveStatus("saved");
+      setTimeout(() => setSaveStatus("idle"), 2000);
+    } catch {
+      setItems(previousItems);
+      setSaveStatus("error");
+    }
+  }, [items, projectId]);
 
   const totalFromBid = items.reduce((sum, i) => sum + i.totalFromBid, 0);
   const totalAdjusted = items.reduce((sum, i) => sum + i.adjustedCost, 0);

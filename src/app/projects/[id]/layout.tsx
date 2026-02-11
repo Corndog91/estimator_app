@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { notFound } from "next/navigation";
 import { ProjectSidebar } from "@/components/project/project-sidebar";
 import { StatusBadge } from "@/components/shared/status-badge";
+import { projectScopeWhere } from "@/lib/project-access";
 
 export default async function ProjectLayout({
   children,
@@ -14,10 +15,11 @@ export default async function ProjectLayout({
 }) {
   const session = await auth();
   if (!session) redirect("/login");
+  const scopeWhere = projectScopeWhere(session);
 
   const { id } = await params;
-  const project = await prisma.project.findUnique({
-    where: { id },
+  const project = await prisma.project.findFirst({
+    where: { id, ...scopeWhere },
     select: { id: true, name: true, projectNumber: true, status: true },
   });
 

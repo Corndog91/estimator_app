@@ -9,6 +9,7 @@ import { formatCurrency } from "@/lib/calculations";
 import { Plus, Search } from "lucide-react";
 import { ProjectFilters } from "@/components/project/project-filters";
 import { DeleteProjectButton } from "@/components/project/delete-project-button";
+import { projectScopeWhere } from "@/lib/project-access";
 
 export default async function ProjectsPage({
   searchParams,
@@ -17,11 +18,13 @@ export default async function ProjectsPage({
 }) {
   const session = await auth();
   if (!session) redirect("/login");
+  const scopeWhere = projectScopeWhere(session);
 
   const params = await searchParams;
 
   const projects = await prisma.project.findMany({
     where: {
+      ...scopeWhere,
       ...(params.status && params.status !== "ALL" ? { status: params.status as "DRAFT" | "IN_PROGRESS" | "REVIEW" | "COMPLETE" | "ARCHIVED" } : {}),
       ...(params.search
         ? {

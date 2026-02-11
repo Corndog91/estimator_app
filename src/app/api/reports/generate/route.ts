@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { hasProjectAccess } from "@/lib/project-access";
 
 export async function POST(req: NextRequest) {
   const session = await auth();
@@ -13,12 +14,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "projectId and reportType required" }, { status: 400 });
   }
 
-  const project = await prisma.project.findUnique({
-    where: { id: projectId },
-    select: { id: true },
-  });
-
-  if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 });
+  if (!(await hasProjectAccess(session, projectId))) {
+    return NextResponse.json({ error: "Project not found" }, { status: 404 });
+  }
 
   // Create report record — PDF rendering via @react-pdf/renderer
   // and R2 upload will be added when storage is configured
